@@ -552,7 +552,6 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
         die: &Die<'input, 'unit>,
     ) -> Result<Option<Type<'input, 'unit>>> {
         let name = self.get_die_name(die)?.unwrap_or("<anon>");
-        let offset = self.die_ref(die).unit_section_offset();
         let Some(size_attr) = die.attr_value(DW_AT_byte_size)? else {
             // Incomplete type
             return Ok(None);
@@ -569,21 +568,18 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
 
         let typ = if KOBJECTS.contains_key(name) {
             Type::Kobject {
-                offset,
                 name: name.to_owned(),
                 size,
                 api: false,
             }
         } else if self.struct_tags.subsystems.iter().any(|x| x == name) {
             Type::Kobject {
-                offset,
                 name: name.to_owned(),
                 size,
                 api: true,
             }
         } else if self.struct_tags.net_sockets.iter().any(|x| x == name) {
             Type::Kobject {
-                offset,
                 name: "NET_SOCKET".to_owned(),
                 size,
                 api: false,
@@ -619,7 +615,6 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
             }
 
             Type::Aggregate {
-                offset,
                 name: name.to_owned(),
                 size,
                 members,
@@ -695,13 +690,11 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
 
             elements.push(1);
             Ok(Some(Type::Array {
-                offset: self.die_ref(die).unit_section_offset(),
                 elements,
                 member_type: self.owned_die_ref(typ),
             }))
         } else {
             Ok(Some(Type::Array {
-                offset: self.die_ref(die).unit_section_offset(),
                 elements,
                 member_type: self.owned_die_ref(typ),
             }))

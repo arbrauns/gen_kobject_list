@@ -131,7 +131,6 @@ impl<'input, 'unit> Deref for OwnedDieRef<'input, 'unit> {
 pub struct KobjectInstance {
     pub name: String,
     pub api: bool,
-    pub addr: u64,
     pub type_name: Option<String>,
     /// A numeric data field used during output generation. Semantics depend on the object type:
     /// - For `k_thread`, the thread ID
@@ -143,9 +142,8 @@ pub struct KobjectInstance {
 }
 
 impl KobjectInstance {
-    fn new(name: String, api: bool, addr: u64) -> Self {
+    fn new(name: String, api: bool) -> Self {
         Self {
-            addr,
             name,
             api,
             // Type name determined later since drivers needs to look at the API struct address
@@ -158,13 +156,11 @@ impl KobjectInstance {
 #[derive(Debug, Clone)]
 pub enum Type<'input, 'unit> {
     Kobject {
-        offset: UnitSectionOffset,
         name: String,
         size: NonZero<usize>,
         api: bool,
     },
     Aggregate {
-        offset: UnitSectionOffset,
         name: String,
         size: NonZero<usize>,
         members: Vec<AggregateMember<'input, 'unit>>,
@@ -173,7 +169,6 @@ pub enum Type<'input, 'unit> {
         child_type: OwnedDieRef<'input, 'unit>,
     },
     Array {
-        offset: UnitSectionOffset,
         /// Number of elements, one entry per array dimension
         elements: Vec<usize>,
         member_type: OwnedDieRef<'input, 'unit>,
@@ -246,7 +241,6 @@ impl Type<'_, '_> {
         match self {
             Type::Kobject { .. } => Some(self.clone()),
             &Type::Aggregate {
-                offset,
                 ref name,
                 size,
                 ref members,
@@ -261,7 +255,6 @@ impl Type<'_, '_> {
                     None
                 } else {
                     Some(Type::Aggregate {
-                        offset,
                         name: name.clone(),
                         size,
                         members,
@@ -290,7 +283,7 @@ impl Type<'_, '_> {
         match self {
             Type::Kobject { name, api, .. } => Box::new(std::iter::once((
                 addr,
-                KobjectInstance::new(name.clone(), *api, addr),
+                KobjectInstance::new(name.clone(), *api),
             ))),
             Type::Aggregate { members, .. } => Box::new(members.iter().flat_map(move |m| {
                 let mt = type_env
