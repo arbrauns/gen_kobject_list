@@ -2,7 +2,7 @@ use std::io::Write;
 
 use color_eyre::Result;
 
-use crate::{consts::KOBJECTS, kobject_to_enum, StructTags};
+use crate::{kobject_to_enum, StructTags, KOBJECTS};
 
 mod gperf;
 

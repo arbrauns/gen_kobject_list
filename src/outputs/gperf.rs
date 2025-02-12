@@ -6,7 +6,7 @@ use color_eyre::{
 };
 use tracing::instrument;
 
-use crate::{types::KobjectInstance, AnalyzerCounters, FileMetadata};
+use crate::{analyze::AnalyzerCounters, FileMetadata, KobjectInstance};
 
 const HEADER: &str = "%compare-lengths
 %define lookup-function-name z_object_lookup
