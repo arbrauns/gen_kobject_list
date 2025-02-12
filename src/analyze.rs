@@ -512,16 +512,6 @@ fn analyze_units<'input>(
     type_env.remove_non_kobjects();
     info!(num_types = type_env.len(), "Pruned types to kobjects");
 
-    /*
-    {
-        let mut types: Vec<_> = type_env.inner.clone().into_iter().collect();
-        types.sort_by_key(|(off, _)| *off);
-        for (off, typ) in types {
-            println!("{}: {typ}", off.as_debug_info_offset().unwrap().0);
-        }
-    }
-    */
-
     // Step 3: Now that we know all the types we are looking for, examine all variables
     let mut all_objs = BTreeMap::new();
     for die in variables {
