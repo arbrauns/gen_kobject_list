@@ -10,7 +10,7 @@ In the author's benchmarks, this drop-in rewrite reduces the bare script runtime
 
 Build and install the tool by cloning the repository and running `cargo install --path . --locked`. Make sure the cargo bin directory is in your `$PATH`.
 
-Apply the following patches to zephyr (based on zephyr [7cef0e36](https://github.com/zephyrproject-rtos/zephyr/tree/7cef0e361467136064a066de718af12e00a9e7d9):
+Apply the following patches to zephyr (based on zephyr [7cef0e36](https://github.com/zephyrproject-rtos/zephyr/tree/7cef0e361467136064a066de718af12e00a9e7d9)):
 
 <details>
 <summary>zephyr patches</summary>
