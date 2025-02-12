@@ -15,7 +15,7 @@ Apply the following patches to zephyr (based on zephyr [7cef0e36](https://github
 <details>
 <summary>zephyr patches</summary>
 
-```
+```diff
 From 87912a903c7d5b38b8702020d82093ebc24db4ba Mon Sep 17 00:00:00 2001
 From: Armin Brauns <armin.brauns@embedded-solutions.at>
 Date: Wed, 12 Feb 2025 15:39:23 +0000
@@ -80,7 +80,7 @@ index 16a471ae6ee..a0f294e7323 100644
 -    ${PYTHON_EXECUTABLE}
 ```
 
-```
+```diff
 From 87912a903c7d5b38b8702020d82093ebc24db4ba Mon Sep 17 00:00:00 2001
 From: Armin Brauns <armin.brauns@embedded-solutions.at>
 Date: Wed, 12 Feb 2025 15:39:23 +0000
