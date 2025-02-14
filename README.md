@@ -1,4 +1,4 @@
-# A Rust rewrite of zephyr's [`gen_kobject_list.sh`]
+# A Rust rewrite of zephyr's [`gen_kobject_list.py`]
 
 This script is in the critical path of the zephyr incremental build process and is invoked up to twice whenever *any* file in the project has changed.
 With large projects that use `CONFIG_USERSPACE=y`, this can create incremental build times of 60 seconds.
@@ -171,4 +171,4 @@ The `test.sh` script can be used to compare the outputs of the rewritten tool to
    a set of reference output files in `golddir/`.
 4. Run `./test.sh "$BIN" golddir/ gen_kobject_list` to check that the generated output files match.
 
-[`gen_kobject_list.sh`]: (https://github.com/zephyrproject-rtos/zephyr/blob/7cef0e361467136064a066de718af12e00a9e7d9/scripts/build/gen_kobject_list.py)
+[`gen_kobject_list.py`]: (https://github.com/zephyrproject-rtos/zephyr/blob/7cef0e361467136064a066de718af12e00a9e7d9/scripts/build/gen_kobject_list.py)
