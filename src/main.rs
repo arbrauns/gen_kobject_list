@@ -84,6 +84,8 @@ pub const KOBJECTS: phf::OrderedMap<&str, Kobject> = phf_ordered_map! {
     "ztest_test_rule" => kobject!("CONFIG_ZTEST", true, false),
     "rtio" => kobject!("CONFIG_RTIO", false, false),
     "rtio_iodev" => kobject!("CONFIG_RTIO", false, false),
+    "rtio_pool" => kobject!("CONFIG_RTIO", false, false),
+    "adc_decoder_api" => kobject!("CONFIG_ADC_STREAM", true, false),
     "sensor_decoder_api" => kobject!("CONFIG_SENSOR_ASYNC_API", true, false),
 };
 
