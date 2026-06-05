@@ -89,6 +89,7 @@ pub const KOBJECTS: phf::OrderedMap<&str, Kobject> = phf_ordered_map! {
     "sensor_decoder_api" => kobject!("CONFIG_SENSOR_ASYNC_API", true, false),
 };
 
+/// A specific instance of a kernel object found in the binary.
 #[derive(Debug, Clone)]
 pub struct KobjectInstance {
     pub name: String,
@@ -115,6 +116,8 @@ impl KobjectInstance {
     }
 }
 
+/// Converts a kobject type name (`k_*`/`z_*`) into the corresponding enum variant identifier
+/// (`K_OBJ_*`).
 fn kobject_to_enum(kobj: &str) -> String {
     format!(
         "K_OBJ_{}",
@@ -124,6 +127,8 @@ fn kobject_to_enum(kobj: &str) -> String {
     )
 }
 
+/// Converts a subsystem name (`*_driver_api`) into the corresponding enum variant identifier
+/// (`K_OBJ_DRIVER_*`).
 fn subsystem_to_enum(subsystem: &str) -> String {
     let subsys = subsystem
         .strip_suffix("_driver_api")
@@ -132,6 +137,9 @@ fn subsystem_to_enum(subsystem: &str) -> String {
     format!("K_OBJ_DRIVER_{subsys}")
 }
 
+/// The type names defined by a `struct_tags.json` file.
+///
+/// The file can be parsed to this type using [`parse_struct_tags_file()`].
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct StructTags {
     subsystems: Vec<String>,
@@ -159,7 +167,8 @@ impl FromIterator<StructTags> for StructTags {
     }
 }
 
-fn parse_subsystems_list_file(path: &Path) -> Result<StructTags> {
+/// Parses a `struct_tags.json` file into its constituent `subsystems` and `net_sockets` lists.
+fn parse_struct_tags_file(path: &Path) -> Result<StructTags> {
     use hifijson::value::Value;
 
     let content = std::fs::read(path).wrap_err("Failed to read file")?;
@@ -245,7 +254,7 @@ fn parse_subsystems_list_file(path: &Path) -> Result<StructTags> {
             bail!("__subsystem is missing _driver_api suffix: {value}")
         }
     }
-    let net_sockets = net_sockets.ok_or_eyre("Missing __subsystem field")?;
+    let net_sockets = net_sockets.ok_or_eyre("Missing __net_socket field")?;
 
     Ok(StructTags {
         subsystems,
@@ -253,6 +262,7 @@ fn parse_subsystems_list_file(path: &Path) -> Result<StructTags> {
     })
 }
 
+/// Returns the address of a given symbol.
 #[instrument(skip(syms))]
 fn get_symbol(syms: &Symbols, symbol: &str) -> Result<u64> {
     syms.get(symbol)
@@ -260,6 +270,7 @@ fn get_symbol(syms: &Symbols, symbol: &str) -> Result<u64> {
         .ok_or_else(|| eyre!("Missing {symbol} symbol"))
 }
 
+/// Returns the address range defined by some `*_start` and `*_end` symbols with the given prefix.
 #[instrument(skip(syms))]
 fn get_symbol_range(syms: &Symbols, prefix: &str) -> Result<Range<u64>> {
     let start = get_symbol(syms, &format!("{prefix}_start"))
@@ -269,6 +280,7 @@ fn get_symbol_range(syms: &Symbols, prefix: &str) -> Result<Range<u64>> {
     Ok(start..end)
 }
 
+/// Command-line arguments
 #[derive(Parser)]
 struct Args {
     /// Print extra debugging information
@@ -327,7 +339,7 @@ pub fn main() -> Result<()> {
         .into_fallible()
         .map_err(|e| match e {})
         .map(|list_file| {
-            parse_subsystems_list_file(list_file).wrap_err_with(|| {
+            parse_struct_tags_file(list_file).wrap_err_with(|| {
                 format!(
                     "Failed to load subsystem list file {}",
                     list_file.to_string_lossy()

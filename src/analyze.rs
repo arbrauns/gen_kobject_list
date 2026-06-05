@@ -34,8 +34,8 @@ type Die<'input, 'unit> = DebuggingInformationEntry<'unit, 'unit, Reader<'input>
 
 const STACK_TYPE: &str = "z_thread_stack_element";
 
-/// `DebuggingInformationEntry` is only meaningful with its associated `Unit`, so this type tracks
-/// both at the same time.
+/// [`DebuggingInformationEntry`] is only meaningful with its associated [`Unit`], so this type
+/// tracks both at the same time.
 #[derive(Debug, Clone, Copy)]
 struct DieRef<'die, 'input, 'unit> {
     die: &'die Die<'input, 'unit>,
@@ -43,6 +43,8 @@ struct DieRef<'die, 'input, 'unit> {
 }
 
 impl<'input, 'unit> DieRef<'_, 'input, 'unit> {
+    /// Looks up the requested dwarf attribute of the DIE. If not present, tries to resolve a
+    /// `DW_AT_specification` pointer to look up the attribute there.
     #[instrument(skip(self))]
     fn get_attr_or_follow_spec(self, attr: DwAt) -> Result<Option<AttributeValue<Reader<'input>>>> {
         if let Some(attr_val) = self.die.attr_value(attr)? {
@@ -61,7 +63,7 @@ impl<'input, 'unit> DieRef<'_, 'input, 'unit> {
             self.unit
                 .entry(spec_offset)?
                 .attr_value(attr)?
-                .ok_or_eyre("spec DIE should have requested attribute")?,
+                .ok_or_else(|| eyre!("specification DIE should have requested {attr} attribute"))?,
         ))
     }
 
@@ -100,7 +102,7 @@ impl<'input, 'unit> Deref for DieRef<'_, 'input, 'unit> {
     }
 }
 
-/// Equivalent of `DieRef` which owns the `DebuggingInformationEntry`.
+/// Equivalent of [`DieRef`] which owns the [`DebuggingInformationEntry`].
 #[derive(Debug, Clone)]
 struct OwnedDieRef<'input, 'unit> {
     die: Die<'input, 'unit>,
@@ -139,6 +141,10 @@ impl<'input, 'unit> Deref for OwnedDieRef<'input, 'unit> {
     }
 }
 
+/// A resolved type declaration.
+///
+/// Types may either be kernel objects, or array, aggregate or const types that refer to other
+/// types (which may or may not be kernel objects).
 #[derive(Debug, Clone)]
 enum Type<'input, 'unit> {
     Kobject {
@@ -197,6 +203,7 @@ impl Display for Type<'_, '_> {
 }
 
 impl Type<'_, '_> {
+    /// Returns `true` iff the type, or any part of it, is a kernel object.
     #[instrument(skip(self, type_env))]
     fn has_kobject(&self, type_env: &TypeEnv) -> bool {
         match self {
@@ -215,6 +222,10 @@ impl Type<'_, '_> {
         }
     }
 
+    /// Clones only the parts of `self` that are kernel objects, if any.
+    ///
+    /// For simple types, this is either `Some(self.clone())` or `None`. For aggregate types, the
+    /// members are recursively filtered to only kobjects.
     #[instrument(skip(self, type_env))]
     fn clone_kobjects_only(&self, type_env: &TypeEnv) -> Option<Self> {
         // FIXME: terrible unnecessary recursion, do it in-place somehow
@@ -260,6 +271,8 @@ impl Type<'_, '_> {
         }
     }
 
+    /// Returns an iterator of kernel object instances and their addresses, contained in a variable
+    /// of type `self` at the given `addr`.
     #[instrument(skip(self, type_env))]
     fn get_kobjects<'a>(
         &'a self,
@@ -331,13 +344,18 @@ impl Type<'_, '_> {
     }
 }
 
+/// A member of an aggregate type, i.e. a struct field.
 #[derive(Debug, Clone)]
 struct AggregateMember<'input, 'unit> {
+    /// The field's name.
     name: String,
+    /// Debug section offset of the definition of the field's type.
     typ: OwnedDieRef<'input, 'unit>,
+    /// Data offset from an instance's base address.
     offset: u64,
 }
 
+/// Various frequently-checked ranges of memory addresses.
 #[derive(Debug)]
 struct MemoryRanges {
     app_smem: Range<u64>,
@@ -365,6 +383,7 @@ impl MemoryRanges {
     }
 }
 
+/// A mapping from type declarations' debug section offsets to resolved [`Type`]s.
 #[derive(Default)]
 struct TypeEnv<'input, 'unit> {
     inner: HashMap<UnitSectionOffset, Type<'input, 'unit>>,
@@ -386,6 +405,9 @@ impl<'input, 'unit> TypeEnv<'input, 'unit> {
         self.inner.len()
     }
 
+    /// Filters down contained types to only those parts that refer to kernel object types.
+    ///
+    /// See [`Type::clone_kobjects_only()`].
     #[instrument(skip(self))]
     fn remove_non_kobjects(&mut self) {
         let clone = self
@@ -397,6 +419,7 @@ impl<'input, 'unit> TypeEnv<'input, 'unit> {
     }
 }
 
+/// Computes a human-readable source file location for the given DIE.
 fn get_die_location(dwarf: &Dwarf<Reader<'_>>, die: DieRef<'_, '_, '_>) -> Result<String> {
     let decl_file: usize = die
         .attr(DW_AT_decl_file)?
@@ -437,6 +460,7 @@ fn get_die_location(dwarf: &Dwarf<Reader<'_>>, die: DieRef<'_, '_, '_>) -> Resul
     Ok(format!("File {}, line {}", path, lineno))
 }
 
+/// Returns a human-readable string representing the given DIE.
 fn debug_die<'input>(dwarf: &Dwarf<Reader<'input>>, die: DieRef<'_, 'input, '_>) -> String {
     let mut s = String::new();
     match get_die_location(dwarf, die) {
@@ -471,6 +495,7 @@ fn debug_die<'input>(dwarf: &Dwarf<Reader<'input>>, die: DieRef<'_, 'input, '_>)
     s
 }
 
+/// Various counters that are used to serially number objects during analysis.
 #[derive(Debug, Default)]
 pub struct AnalyzerCounters {
     pub threads: usize,
@@ -479,6 +504,8 @@ pub struct AnalyzerCounters {
     pub stacks: usize,
 }
 
+/// Analyzes all compile units in the given ELF file and extracts the kernel object instances
+/// defined therein.
 #[instrument(skip_all)]
 fn analyze_units<'input>(
     elf: &object::File,
@@ -675,6 +702,8 @@ fn analyze_units<'input>(
     Ok((ret, counters))
 }
 
+/// Result of analyzing a DIE. We are only interested in variable definitions and type
+/// declarations.
 #[derive(Debug)]
 enum DieResult<'input, 'unit> {
     Variable,
@@ -682,6 +711,7 @@ enum DieResult<'input, 'unit> {
     None,
 }
 
+/// Analyzes a single compile unit, collecting variables and types defined therein.
 struct UnitAnalyzer<'parent, 'input, 'unit> {
     dwarf: &'parent Dwarf<Reader<'input>>,
     struct_tags: &'parent StructTags,
@@ -690,6 +720,8 @@ struct UnitAnalyzer<'parent, 'input, 'unit> {
 }
 
 impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
+    /// Analyzes the compile unit. Discovered variables are added to `variables`, discovered
+    /// types are added to `Self:type_env`.
     #[instrument(
         skip(self, variables),
         fields(
@@ -961,6 +993,7 @@ fn device_get_api_addr(elf: &object::File, addr: u64) -> Result<u64> {
     bail!("device struct at address 0x{addr:016x} not found in ELF")
 }
 
+/// Pre-computed metadata about a source ELF file.
 pub struct FileMetadata<'input> {
     pub syms: Symbols<'input>,
     pub max_threads: usize,
