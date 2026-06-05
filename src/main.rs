@@ -324,7 +324,11 @@ fn open_outfile(outfile: PathBuf) -> Result<BufWriter<std::fs::File>, color_eyre
 
 pub fn main() -> Result<()> {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_writer(io::stderr))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .map_event_format(tracing_subscriber::fmt::format::Format::pretty)
+                .with_writer(io::stderr),
+        )
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_error::ErrorLayer::default())
         .init();

@@ -226,7 +226,7 @@ impl Type<'_, '_> {
     ///
     /// For simple types, this is either `Some(self.clone())` or `None`. For aggregate types, the
     /// members are recursively filtered to only kobjects.
-    #[instrument(skip(self, type_env))]
+    #[instrument(skip(self, type_env), fields(self = %self))]
     fn clone_kobjects_only(&self, type_env: &TypeEnv) -> Option<Self> {
         // FIXME: terrible unnecessary recursion, do it in-place somehow
         let die_has_kobject = |dieref: &OwnedDieRef| {
@@ -251,6 +251,11 @@ impl Type<'_, '_> {
                 if members.is_empty() {
                     None
                 } else {
+                    trace!(
+                        members = ?members.iter().map(|m| m.name.clone()).collect::<Vec<_>>(),
+                        "struct has members with kobjects"
+                    );
+
                     Some(Type::Aggregate {
                         name: name.clone(),
                         size,
@@ -744,7 +749,7 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
         level = "DEBUG",
         skip(self, die),
         fields(
-            die = debug_die(self.dwarf, self.die_ref(die)),
+            die = %debug_die(self.dwarf, self.die_ref(die)),
         ),
     )]
     fn analyze_die(&mut self, die: &Die<'input, 'unit>) -> Result<DieResult<'input, 'unit>> {
@@ -758,14 +763,17 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
             constants::DW_TAG_array_type => self.analyze_die_array(die)?,
             constants::DW_TAG_typedef => self.analyze_die_typedef(die)?,
             constants::DW_TAG_variable => {
+                trace!("is a variable");
                 return Ok(DieResult::Variable);
             }
             _ => return Ok(DieResult::None),
         };
 
         if let Some(typ) = typ {
+            trace!("is a type");
             Ok(DieResult::Type(typ))
         } else {
+            trace!("neither variable or handled type");
             Ok(DieResult::None)
         }
     }
@@ -921,7 +929,7 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
         if elements.is_empty() {
             let Some(mt) = self.type_env.get(self.die_ref(&typ)) else {
                 debug!(
-                    typ = debug_die(self.dwarf, self.die_ref(&typ)),
+                    typ = %debug_die(self.dwarf, self.die_ref(&typ)),
                     "member type not in type env"
                 );
                 return Ok(None);
