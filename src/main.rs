@@ -178,13 +178,15 @@ fn parse_subsystems_list_file(path: &Path) -> Result<StructTags> {
     let mut net_sockets: Option<Vec<String>> = None;
 
     for (k, v) in o {
-        fn handle_field<T>(
+        fn handle_field<T, F>(
             field: &mut Option<Vec<T>>,
             key: &str,
             arr: Value<&str, Cow<str>>,
+            convert_arr_item: F,
         ) -> Result<()>
         where
             T: TryFrom<String>,
+            F: Fn(Value<&str, Cow<str>>) -> Result<T>,
             color_eyre::Report: From<<T as TryFrom<String>>::Error>,
         {
             if field.is_some() {
@@ -197,13 +199,8 @@ fn parse_subsystems_list_file(path: &Path) -> Result<StructTags> {
 
             let items = arr
                 .into_iter()
-                .map(|v| {
-                    let Value::String(s) = v else {
-                        bail!("Expected string value, got {v}");
-                    };
-                    Ok(s.into_owned().try_into()?)
-                })
-                .collect::<Result<Vec<T>, _>>()?;
+                .map(convert_arr_item)
+                .collect::<Result<Vec<T>>>()?;
 
             *field = Some(items);
 
@@ -211,8 +208,31 @@ fn parse_subsystems_list_file(path: &Path) -> Result<StructTags> {
         }
 
         match k.as_ref() {
-            "__subsystem" => handle_field(&mut subsystems, &k, v)?,
-            "__net_socket" => handle_field(&mut net_sockets, &k, v)?,
+            "__subsystem" => handle_field(&mut subsystems, &k, v, |v| match v {
+                Value::String(s) => Ok(s.into_owned()),
+                Value::Object(items) => {
+                    let name = items
+                        .into_iter()
+                        .find_map(|(k, v)| (k == "name").then_some(v))
+                        .ok_or_else(|| {
+                            eyre!("Missing \"name\" key in definition for extended subsystem")
+                        })?;
+
+                    let Value::String(s) = name else {
+                        bail!("Expected string value for extended subsystem name, got {name}");
+                    };
+                    Ok(s.into_owned())
+                }
+                _ => bail!("Expected string or object value, got {v}"),
+            })?,
+
+            "__net_socket" => handle_field(&mut net_sockets, &k, v, |v| {
+                let Value::String(s) = v else {
+                    bail!("Expected string value, got {v}");
+                };
+                Ok(s.into_owned())
+            })?,
+
             _ => {
                 bail!("Unknown key {k}")
             }
