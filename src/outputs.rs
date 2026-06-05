@@ -2,7 +2,7 @@ use std::io::Write;
 
 use color_eyre::Result;
 
-use crate::{kobject_to_enum, StructTags, KOBJECTS};
+use crate::{kobject_to_enum, subsystem_to_enum, StructTags, KOBJECTS};
 
 mod gperf;
 
@@ -60,8 +60,26 @@ pub fn write_kobj_types_output(mut outfile: impl Write, struct_tags: &StructTags
 
     writeln!(outfile, "/* Driver subsystems */")?;
     for subsystem in &struct_tags.subsystems {
-        let subsystem = subsystem.replace("_driver_api", "").to_uppercase();
-        writeln!(outfile, "K_OBJ_DRIVER_{subsystem},")?;
+        writeln!(outfile, "{},", subsystem_to_enum(subsystem))?;
+    }
+
+    if let Some((first, last)) = struct_tags
+        .subsystems
+        .first()
+        .zip(struct_tags.subsystems.last())
+    {
+        writeln!(
+            outfile,
+            "K_OBJ_DRIVER_FIRST = {},",
+            subsystem_to_enum(first)
+        )?;
+        writeln!(outfile, "K_OBJ_DRIVER_LAST = {},", subsystem_to_enum(last))?;
+    } else {
+        // There will always be core kernel objects. In the unlikely event
+        // there are no driver subsystems, order the first and last driver
+        // entries to values that will indicate an empty set (first > last).
+        writeln!(outfile, "K_OBJ_DRIVER_LAST,")?;
+        writeln!(outfile, "K_OBJ_DRIVER_FIRST,")?;
     }
 
     Ok(())
