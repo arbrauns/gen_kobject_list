@@ -284,8 +284,8 @@ fn get_symbol_range(syms: &Symbols, prefix: &str) -> Result<Range<u64>> {
 #[derive(Parser)]
 struct Args {
     /// Print extra debugging information
-    #[arg(short, long)]
-    verbose: bool,
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
 
     /// Input zephyr ELF binary
     #[arg(short, long)]
@@ -323,19 +323,31 @@ fn open_outfile(outfile: PathBuf) -> Result<BufWriter<std::fs::File>, color_eyre
 }
 
 pub fn main() -> Result<()> {
+    let args = Args::parse();
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
                 .map_event_format(tracing_subscriber::fmt::format::Format::pretty)
                 .with_writer(io::stderr),
         )
-        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(
+            tracing_subscriber::EnvFilter::builder()
+                .with_default_directive(
+                    match args.verbose {
+                        0 => tracing_subscriber::filter::LevelFilter::ERROR,
+                        1 => tracing_subscriber::filter::LevelFilter::INFO,
+                        2 => tracing_subscriber::filter::LevelFilter::DEBUG,
+                        3.. => tracing_subscriber::filter::LevelFilter::TRACE,
+                    }
+                    .into(),
+                )
+                .from_env_lossy(),
+        )
         .with(tracing_error::ErrorLayer::default())
         .init();
 
     color_eyre::install()?;
-
-    let args = Args::parse();
 
     let struct_tags: StructTags = args
         .include_subsystem_list
