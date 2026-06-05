@@ -36,7 +36,7 @@ output_args=()
 for outtype in "${OUTPUT_TYPES[@]}"; do
 	output_args+=("--$outtype-output" "$workdir/$outtype")
 done
-"$runner" \
+time "$runner" \
 	--include-subsystem-list "$STRUCTTAGS" \
 	--kernel "$elf" \
 	"${output_args[@]}"
