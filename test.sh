@@ -41,6 +41,12 @@ done
 	--kernel "$elf" \
 	"${output_args[@]}"
 
+# gen_kobject_list.py produces lots of empty lines in the output, remove them
+sed -i -E '/^\s*$/d' "$workdir/validation"
+# we put a trailing comma after the last entry in stack_data, python script
+# does not - remove the comma for equivalence checking
+sed -i --null-data -E 's/},(\n};\n%%)/}\1/' "$workdir/gperf"
+
 if [ "$accept" -eq 1 ]; then
 	mkdir "$golddir"
 fi
@@ -62,5 +68,7 @@ done
 if [ "$all_good" -eq 1 ]; then
 	echo "All outputs correct"
 else
+	echo "Outputs in $workdir mismatched. Press any key to continue..."
+	read
 	exit 1
 fi
