@@ -20,6 +20,7 @@ use gimli::{
     AttributeValue, DebuggingInformationEntry, DwAt, Dwarf, EndianSlice, Operation, RunTimeEndian,
     Unit, UnitSectionOffset,
 };
+use indexmap::IndexMap;
 use object::{Object as _, ObjectSection as _};
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -513,7 +514,10 @@ fn analyze_units<'input>(
     info!(num_types = type_env.len(), "Pruned types to kobjects");
 
     // Step 3: Now that we know all the types we are looking for, examine all variables
-    let mut all_objs = BTreeMap::new();
+
+    // ensure objects remain sorted by variable order to maintain equivalent output to python
+    // script (order affects e.g. thread IDs)
+    let mut all_objs = IndexMap::new();
     for die in variables {
         let Some(name) = die.get_name(dwarf)? else {
             continue;
