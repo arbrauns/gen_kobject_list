@@ -32,40 +32,64 @@ cleanup() {
 }
 trap cleanup EXIT
 
-output_args=()
-for outtype in "${OUTPUT_TYPES[@]}"; do
-	output_args+=("--$outtype-output" "$workdir/$outtype")
-done
-time "$runner" \
-	--include-subsystem-list "$STRUCTTAGS" \
-	--kernel "$elf" \
-	"${output_args[@]}"
+generate_outputs() {
+	local output_args=()
+	for outtype in "${OUTPUT_TYPES[@]}"; do
+		output_args+=("--$outtype-output" "$workdir/$outtype")
+	done
+	time "$runner" \
+		--include-subsystem-list "$STRUCTTAGS" \
+		--kernel "$elf" \
+		"${output_args[@]}"
+}
 
-# gen_kobject_list.py produces lots of empty lines in the output, remove them
-sed -i -E '/^\s*$/d' "$workdir/validation"
-# we put a trailing comma after the last entry in stack_data, python script
-# does not - remove the comma for equivalence checking
-sed -i --null-data -E 's/},(\n};\n%%)/}\1/' "$workdir/gperf"
+postprocess_outputs() {
+	# gen_kobject_list.py produces lots of empty lines in the output, remove them
+	sed -i -E '/^\s*$/d' "$workdir/validation"
+	# we put a trailing comma after the last entry in stack_data, python script
+	# does not - remove the comma for equivalence checking
+	sed -i --null-data -E 's/},(\n};\n%%)/}\1/' "$workdir/gperf"
+}
 
-if [ "$accept" -eq 1 ]; then
-	mkdir "$golddir"
-fi
+compare_and_accept() {
+	local all_good=1
 
-all_good=1
-for outtype in "${OUTPUT_TYPES[@]}"; do
-	outfile=$workdir/$outtype
-	golden=$golddir/$outtype
-	if ! cmp "$outfile" "$golden"; then
-		if [ "$accept" -eq 1 ]; then
-			echo "Accepting changed file $outfile as new golden file at $golden"
-			cp "$outfile" "$golden"
-		else
-			all_good=0
-		fi
+	if [ "$accept" -eq 1 ]; then
+		mkdir -p "$golddir"
 	fi
-done
 
-if [ "$all_good" -eq 1 ]; then
+	for outtype in "${OUTPUT_TYPES[@]}"; do
+		local outfile=$workdir/$outtype
+		local golden=$golddir/$outtype
+
+		if [ ! -f "$golden" ]; then
+			if [ "$accept" -eq 1 ]; then
+				echo "Accepting new golden file at $golden"
+				cp "$outfile" "$golden"
+			else
+				echo "Missing golden file at $golden"
+				all_good=0
+			fi
+		elif ! diff -u "$golden" "$outfile"; then
+			if [ "$accept" -eq 1 ]; then
+				echo "Accepting changed file $outfile as new golden file at $golden"
+				cp "$outfile" "$golden"
+			else
+				echo "Output mismatch between $outfile and golden file at $golden"
+				all_good=0
+			fi
+		fi
+	done
+
+	[[ all_good -eq 1 ]]
+}
+
+generate_outputs
+postprocess_outputs
+
+compare_and_accept
+
+if compare_and_accept; then
 	echo "All outputs correct"
 else
 	echo "Outputs in $workdir mismatched. Press any key to continue..."
