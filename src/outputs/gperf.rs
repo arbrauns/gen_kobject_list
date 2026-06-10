@@ -1,3 +1,8 @@
+// Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2025 Embedded Solutions GmbH <office@embedded-solutions.at>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{collections::BTreeMap, io::Write, iter::repeat_n, ops::Range};
 
 use color_eyre::{
