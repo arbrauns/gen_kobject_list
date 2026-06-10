@@ -57,15 +57,33 @@ void k_object_wordlist_foreach(_wordlist_cb_func_t func, void *context)
 #endif
 ";
 
+fn get_metadata_field(gen_priv_stacks: bool, ko: &KobjectInstance) -> (&str, String) {
+    let data = ko.data;
+
+    match ko.type_name.as_deref() {
+        Some("K_OBJ_THREAD_STACK_ELEMENT") => {
+            if gen_priv_stacks {
+                ("stack_data", format!("&stack_data[{data}]"))
+            } else {
+                ("stack_size", data.to_string())
+            }
+        }
+        Some("K_OBJ_THREAD") => ("thread_id", data.to_string()),
+        Some("K_OBJ_SYS_MUTEX") => ("mutex", format!("&kernel_mutexes[{data}]")),
+        Some("K_OBJ_FUTEX") => ("futex_data", format!("&futex_data[{data}]")),
+        _ => ("unused", "0".to_owned()),
+    }
+}
+
 #[instrument(skip_all)]
-pub fn write_gperf_table(
-    mut outfile: impl Write,
-    meta: &FileMetadata,
+pub fn write_gperf_table<W: Write>(
+    mut outfile: W,
+    meta: &FileMetadata<'_>,
     mut objs: BTreeMap<u64, KobjectInstance>,
     counters: AnalyzerCounters,
     static_kernel_objects: Range<u64>,
 ) -> Result<()> {
-    write!(outfile, "{}", HEADER)?;
+    write!(outfile, "{HEADER}")?;
     if counters.sys_mutexes != 0 {
         writeln!(
             outfile,
@@ -94,24 +112,6 @@ pub fn write_gperf_table(
             write!(outfile, "Z_FUTEX_DATA_INITIALIZER(futex_data[{i}])")?;
         }
         writeln!(outfile, "}};")?;
-    }
-
-    fn get_metadata_field(gen_priv_stacks: bool, ko: &KobjectInstance) -> (&str, String) {
-        let data = ko.data;
-
-        match ko.type_name.as_deref() {
-            Some("K_OBJ_THREAD_STACK_ELEMENT") => {
-                if gen_priv_stacks {
-                    ("stack_data", format!("&stack_data[{data}]"))
-                } else {
-                    ("stack_size", data.to_string())
-                }
-            }
-            Some("K_OBJ_THREAD") => ("thread_id", data.to_string()),
-            Some("K_OBJ_SYS_MUTEX") => ("mutex", format!("&kernel_mutexes[{data}]")),
-            Some("K_OBJ_FUTEX") => ("futex_data", format!("&futex_data[{data}]")),
-            _ => ("unused", "0".to_owned()),
-        }
     }
 
     let gen_priv_stacks = meta.syms.contains_key("CONFIG_GEN_PRIV_STACKS");
@@ -208,7 +208,7 @@ pub fn write_gperf_table(
         }
     }
 
-    write!(outfile, "{}", FOOTER)?;
+    write!(outfile, "{FOOTER}")?;
 
     // Generate the array of already mapped thread indexes
     writeln!(outfile)?;

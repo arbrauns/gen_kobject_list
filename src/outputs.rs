@@ -13,7 +13,7 @@ mod gperf;
 
 pub use gperf::write_gperf_table;
 
-pub fn write_validation_output(mut outfile: impl Write, struct_tags: &StructTags) -> Result<()> {
+pub fn write_validation_output<W: Write>(mut outfile: W, struct_tags: &StructTags) -> Result<()> {
     writeln!(outfile, "#ifndef DRIVER_VALIDATION_GEN_H")?;
     writeln!(outfile, "#define DRIVER_VALIDATION_GEN_H")?;
     writeln!(
@@ -45,7 +45,7 @@ pub fn write_validation_output(mut outfile: impl Write, struct_tags: &StructTags
     Ok(())
 }
 
-pub fn write_kobj_types_output(mut outfile: impl Write, struct_tags: &StructTags) -> Result<()> {
+pub fn write_kobj_types_output<W: Write>(mut outfile: W, struct_tags: &StructTags) -> Result<()> {
     writeln!(outfile, "/* Core kernel objects */")?;
     for (kobj, obj_info) in &KOBJECTS {
         if *kobj == "device" {
@@ -90,7 +90,7 @@ pub fn write_kobj_types_output(mut outfile: impl Write, struct_tags: &StructTags
     Ok(())
 }
 
-pub fn write_kobj_otype_output(mut outfile: impl Write, struct_tags: &StructTags) -> Result<()> {
+pub fn write_kobj_otype_output<W: Write>(mut outfile: W, struct_tags: &StructTags) -> Result<()> {
     writeln!(outfile, "/* Core kernel objects */")?;
     for (kobj, obj_info) in &KOBJECTS {
         if *kobj == "device" {
@@ -124,7 +124,7 @@ pub fn write_kobj_otype_output(mut outfile: impl Write, struct_tags: &StructTags
     Ok(())
 }
 
-pub fn write_kobj_size_output(mut outfile: impl Write) -> Result<()> {
+pub fn write_kobj_size_output<W: Write>(mut outfile: W) -> Result<()> {
     writeln!(outfile, "/* Non device/stack objects */")?;
     for (kobj, obj_info) in &KOBJECTS {
         if !obj_info.dyn_allocatable {
@@ -137,7 +137,7 @@ pub fn write_kobj_size_output(mut outfile: impl Write) -> Result<()> {
 
         writeln!(
             outfile,
-            r#"case {}: ret = sizeof(struct {kobj}); break;"#,
+            r"case {}: ret = sizeof(struct {kobj}); break;",
             kobject_to_enum(kobj)
         )?;
         if obj_info.kconfig.is_some() {

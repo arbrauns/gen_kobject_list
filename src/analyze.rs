@@ -12,10 +12,10 @@ use std::{
 };
 
 use color_eyre::{
-    eyre::{bail, eyre, Context, OptionExt},
+    eyre::{bail, eyre, Context as _, OptionExt as _},
     Result, Section as _,
 };
-use fallible_iterator::FallibleIterator;
+use fallible_iterator::FallibleIterator as _;
 use gimli::{
     constants::{
         self, DW_AT_byte_size, DW_AT_count, DW_AT_data_member_location, DW_AT_decl_file,
@@ -54,7 +54,7 @@ impl<'input, 'unit> DieRef<'_, 'input, 'unit> {
     fn get_attr_or_follow_spec(self, attr: DwAt) -> Result<Option<AttributeValue<Reader<'input>>>> {
         if let Some(attr_val) = self.die.attr_value(attr)? {
             return Ok(Some(attr_val));
-        };
+        }
 
         let Some(spec_ref) = self.die.attr_value(DW_AT_specification)? else {
             return Ok(None);
@@ -72,12 +72,12 @@ impl<'input, 'unit> DieRef<'_, 'input, 'unit> {
         ))
     }
 
-    pub fn unit_section_offset(self) -> UnitSectionOffset {
+    fn unit_section_offset(self) -> UnitSectionOffset {
         self.die.offset().to_unit_section_offset(self.unit)
     }
 
     #[instrument(skip(self, dwarf))]
-    pub fn get_name(self, dwarf: &Dwarf<Reader<'input>>) -> Result<Option<&'input str>> {
+    fn get_name(self, dwarf: &Dwarf<Reader<'input>>) -> Result<Option<&'input str>> {
         let Some(attr_val) = self.get_attr_or_follow_spec(DW_AT_name)? else {
             return Ok(None);
         };
@@ -86,7 +86,7 @@ impl<'input, 'unit> DieRef<'_, 'input, 'unit> {
     }
 
     #[instrument(skip(self))]
-    pub fn get_type(self) -> Result<Option<Die<'input, 'unit>>> {
+    fn get_type(self) -> Result<Option<Die<'input, 'unit>>> {
         let Some(attr_val) = self.get_attr_or_follow_spec(DW_AT_type)? else {
             return Ok(None);
         };
@@ -174,7 +174,7 @@ enum Type<'input, 'unit> {
 
 impl Display for Type<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn debug_info_offset(die: &OwnedDieRef) -> usize {
+        fn debug_info_offset(die: &OwnedDieRef<'_, '_>) -> usize {
             let UnitSectionOffset::DebugInfoOffset(dio) = die.as_die_ref().unit_section_offset()
             else {
                 panic!("DIE should be in .debug_info");
@@ -210,7 +210,7 @@ impl Display for Type<'_, '_> {
 impl Type<'_, '_> {
     /// Returns `true` iff the type, or any part of it, is a kernel object.
     #[instrument(skip(self, type_env))]
-    fn has_kobject(&self, type_env: &TypeEnv) -> bool {
+    fn has_kobject(&self, type_env: &TypeEnv<'_, '_>) -> bool {
         match self {
             Type::Kobject { .. } => true,
             Type::Aggregate { members, .. } => members.iter().any(|m| {
@@ -232,9 +232,9 @@ impl Type<'_, '_> {
     /// For simple types, this is either `Some(self.clone())` or `None`. For aggregate types, the
     /// members are recursively filtered to only kobjects.
     #[instrument(skip(self, type_env), fields(self = %self))]
-    fn clone_kobjects_only(&self, type_env: &TypeEnv) -> Option<Self> {
+    fn clone_kobjects_only(&self, type_env: &TypeEnv<'_, '_>) -> Option<Self> {
         // FIXME: terrible unnecessary recursion, do it in-place somehow
-        let die_has_kobject = |dieref: &OwnedDieRef| {
+        let die_has_kobject = |dieref: &OwnedDieRef<'_, '_>| {
             type_env
                 .get(dieref.as_die_ref())
                 .is_some_and(|t| t.has_kobject(type_env))
@@ -271,13 +271,7 @@ impl Type<'_, '_> {
             Type::Const { child_type: typ }
             | Type::Array {
                 member_type: typ, ..
-            } => {
-                if die_has_kobject(typ) {
-                    Some(self.clone())
-                } else {
-                    None
-                }
-            }
+            } => die_has_kobject(typ).then(|| self.clone()),
         }
     }
 
@@ -286,7 +280,7 @@ impl Type<'_, '_> {
     #[instrument(skip(self, type_env))]
     fn get_kobjects<'a>(
         &'a self,
-        type_env: &'a TypeEnv,
+        type_env: &'a TypeEnv<'_, '_>,
         addr: u64,
     ) -> Box<dyn Iterator<Item = (u64, KobjectInstance)> + 'a> {
         match self {
@@ -374,7 +368,7 @@ struct MemoryRanges {
 }
 
 impl MemoryRanges {
-    fn from_symbols(syms: &Symbols) -> Result<Self> {
+    fn from_symbols(syms: &Symbols<'_>) -> Result<Self> {
         let app_smem = get_symbol_range(syms, "_app_smem")?;
         let app_smem_pinned = if syms.contains_key("CONFIG_LINKER_USE_PINNED_SECTION")
             && syms.contains_key("_app_smem_pinned_start")
@@ -467,11 +461,13 @@ fn get_die_location(dwarf: &Dwarf<Reader<'_>>, die: DieRef<'_, '_, '_>) -> Resul
         .udata_value()
         .ok_or_eyre("Unsupported form for DW_AT_decl_line attribute")?;
 
-    Ok(format!("File {}, line {}", path, lineno))
+    Ok(format!("File {path}, line {lineno}"))
 }
 
 /// Returns a human-readable string representing the given DIE.
 fn debug_die<'input>(dwarf: &Dwarf<Reader<'input>>, die: DieRef<'_, 'input, '_>) -> String {
+    #![expect(clippy::unwrap_used, reason = "writing to string can't fail")]
+
     let mut s = String::new();
     match get_die_location(dwarf, die) {
         Ok(loc) => writeln!(&mut s, "{loc}").unwrap(),
@@ -495,7 +491,7 @@ fn debug_die<'input>(dwarf: &Dwarf<Reader<'input>>, die: DieRef<'_, 'input, '_>)
     loop {
         match attrs.next() {
             Ok(Some(attr)) => {
-                writeln!(&mut s, "   - {:-20}={:?}", attr.name(), attr.raw_value()).unwrap()
+                writeln!(&mut s, "   - {:-20}={:?}", attr.name(), attr.raw_value()).unwrap();
             }
             Ok(None) => break,
             Err(err) => writeln!(&mut s, "  - [failed to parse attributes: {err}]").unwrap(),
@@ -518,7 +514,7 @@ pub struct AnalyzerCounters {
 /// defined therein.
 #[instrument(skip_all)]
 fn analyze_units<'input>(
-    elf: &object::File,
+    elf: &object::File<'_>,
     dwarf: &Dwarf<Reader<'input>>,
     units: &[Unit<Reader<'input>>],
     struct_tags: &StructTags,
@@ -869,7 +865,7 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
                     name: self.get_die_name(child)?.unwrap_or("<anon>").to_owned(),
                     typ: self.owned_die_ref(member_type),
                     offset: data_member_location,
-                })
+                });
             }
 
             Type::Aggregate {
@@ -975,35 +971,50 @@ impl<'input, 'unit> UnitAnalyzer<'_, 'input, 'unit> {
 }
 
 #[instrument(skip(elf))]
-fn device_get_api_addr(elf: &object::File, addr: u64) -> Result<u64> {
+fn device_get_api_addr(elf: &object::File<'_>, device_addr: u64) -> Result<u64> {
     // See include/device.h for a description of struct device
     let api_member_offset = if elf.is_64() { 16 } else { 8 };
-    let addr = addr + api_member_offset;
+    let api_member_addr = device_addr + api_member_offset;
 
     for sect in elf.sections() {
         let start = sect.address();
         let end = start + sect.size();
-        if start <= addr && addr < end {
-            let offset = usize::try_from(addr - start).expect("u64 should fit in usize");
-            let data = sect.uncompressed_data()?;
-            return Ok(if elf.is_64() {
-                (if elf.is_little_endian() {
+        if start <= api_member_addr && api_member_addr < end {
+            let offset = usize::try_from(api_member_addr - start).expect("u64 should fit in usize");
+            let data = &sect.uncompressed_data()?[offset..];
+
+            let api_addr = if elf.is_64() {
+                let func = if elf.is_little_endian() {
                     u64::from_le_bytes
                 } else {
                     u64::from_be_bytes
-                })(data[offset..offset + 8].try_into().unwrap())
+                };
+
+                func(
+                    *data
+                        .first_chunk()
+                        .ok_or_eyre("device API address past end of section")?,
+                )
             } else {
-                (if elf.is_little_endian() {
+                let func = if elf.is_little_endian() {
                     u32::from_le_bytes
                 } else {
                     u32::from_be_bytes
-                })(data[offset..offset + 4].try_into().unwrap())
+                };
+
+                func(
+                    *data
+                        .first_chunk()
+                        .ok_or_eyre("device API address past end of section")?,
+                )
                 .into()
-            });
+            };
+
+            return Ok(api_addr);
         }
     }
 
-    bail!("device struct at address 0x{addr:016x} not found in ELF")
+    bail!("device struct at address 0x{device_addr:016x} not found in ELF")
 }
 
 /// Pre-computed metadata about a source ELF file.
@@ -1024,18 +1035,19 @@ pub fn find_kobjects<'input>(
 
     let dwarf_sections = gimli::DwarfSections::load(|id| {
         elf.section_by_name(id.name())
-            .map(|section| section.uncompressed_data())
-            .unwrap_or(Ok(Cow::Borrowed([].as_slice())))
+            .map_or(Ok(Cow::Borrowed([].as_slice())), |section| {
+                section.uncompressed_data()
+            })
     })
     .wrap_err("Failed to load DWARF sections")?;
 
     let endian = if meta.is_little_endian {
-        gimli::RunTimeEndian::Little
+        RunTimeEndian::Little
     } else {
-        gimli::RunTimeEndian::Big
+        RunTimeEndian::Big
     };
 
-    let dwarf = dwarf_sections.borrow(|section| gimli::EndianSlice::new(section.as_ref(), endian));
+    let dwarf = dwarf_sections.borrow(|section| EndianSlice::new(section.as_ref(), endian));
     let units: Vec<_> = dwarf
         .units()
         .map(|unit_header| dwarf.unit(unit_header))
@@ -1043,7 +1055,8 @@ pub fn find_kobjects<'input>(
     for unit in &units {
         assert_eq!(
             unit.header.encoding().address_size,
-            if meta.is_64bit { 8 } else { 4 }
+            if meta.is_64bit { 8 } else { 4 },
+            "mismatch between ELF address size and CONFIG_64BIT"
         );
     }
 

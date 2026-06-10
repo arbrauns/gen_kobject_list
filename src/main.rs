@@ -15,10 +15,10 @@ use std::{
 use analyze::{find_kobjects, FileMetadata};
 use clap::Parser;
 use color_eyre::{
-    eyre::{bail, eyre, Context, OptionExt},
+    eyre::{bail, eyre, Context as _, OptionExt as _},
     Result,
 };
-use fallible_iterator::{FallibleIterator, IteratorExt};
+use fallible_iterator::{FallibleIterator as _, IteratorExt as _};
 use hifijson::token::Lex as _;
 use object::{Object as _, ObjectSymbol as _};
 use phf::phf_ordered_map;
@@ -30,8 +30,8 @@ use crate::outputs::{
     write_validation_output,
 };
 
-mod analyze;
-mod outputs;
+pub mod analyze;
+pub mod outputs;
 
 pub type Symbols<'name> = HashMap<&'name str, u64>;
 
@@ -110,6 +110,7 @@ pub struct KobjectInstance {
 }
 
 impl KobjectInstance {
+    #[must_use]
     pub fn new(name: String, api: bool) -> Self {
         Self {
             name,
@@ -146,9 +147,9 @@ fn subsystem_to_enum(subsystem: &str) -> String {
 ///
 /// The file can be parsed to this type using [`parse_struct_tags_file()`].
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct StructTags {
-    subsystems: Vec<String>,
-    net_sockets: Vec<String>,
+pub struct StructTags {
+    pub subsystems: Vec<String>,
+    pub net_sockets: Vec<String>,
 }
 
 impl Extend<StructTags> for StructTags {
@@ -195,12 +196,12 @@ fn parse_struct_tags_file(path: &Path) -> Result<StructTags> {
         fn handle_field<T, F>(
             field: &mut Option<Vec<T>>,
             key: &str,
-            arr: Value<&str, Cow<str>>,
+            arr: Value<&str, Cow<'_, str>>,
             convert_arr_item: F,
         ) -> Result<()>
         where
             T: TryFrom<String>,
-            F: Fn(Value<&str, Cow<str>>) -> Result<T>,
+            F: Fn(Value<&str, Cow<'_, str>>) -> Result<T>,
             color_eyre::Report: From<<T as TryFrom<String>>::Error>,
         {
             if field.is_some() {
@@ -269,7 +270,7 @@ fn parse_struct_tags_file(path: &Path) -> Result<StructTags> {
 
 /// Returns the address of a given symbol.
 #[instrument(skip(syms))]
-fn get_symbol(syms: &Symbols, symbol: &str) -> Result<u64> {
+fn get_symbol(syms: &Symbols<'_>, symbol: &str) -> Result<u64> {
     syms.get(symbol)
         .copied()
         .ok_or_else(|| eyre!("Missing {symbol} symbol"))
@@ -277,7 +278,7 @@ fn get_symbol(syms: &Symbols, symbol: &str) -> Result<u64> {
 
 /// Returns the address range defined by some `*_start` and `*_end` symbols with the given prefix.
 #[instrument(skip(syms))]
-fn get_symbol_range(syms: &Symbols, prefix: &str) -> Result<Range<u64>> {
+fn get_symbol_range(syms: &Symbols<'_>, prefix: &str) -> Result<Range<u64>> {
     let start = get_symbol(syms, &format!("{prefix}_start"))
         .or_else(|_e| get_symbol(syms, &format!("{prefix}_begin")))
         .map_err(|_e| eyre!("No _start/_begin symbol found for {prefix}"))?;
@@ -306,13 +307,13 @@ struct Args {
     /// Output driver validation macros
     #[arg(short = 'V', long)]
     validation_output: Option<PathBuf>,
-    /// Output k_object enum constants
+    /// Output `k_object` enum constants
     #[arg(short = 'K', long)]
     kobj_types_output: Option<PathBuf>,
-    /// Output case statements for otype_to_str()
+    /// Output case statements for `otype_to_str()`
     #[arg(short = 'S', long)]
     kobj_otype_output: Option<PathBuf>,
-    /// Output case statements for obj_size_get()
+    /// Output case statements for `obj_size_get()`
     #[arg(short = 'Z', long)]
     kobj_size_output: Option<PathBuf>,
 }
@@ -391,7 +392,11 @@ pub fn main() -> Result<()> {
             is_little_endian: elf.is_little_endian(),
             syms,
         };
-        assert_eq!(elf.is_64(), meta.is_64bit);
+        assert_eq!(
+            elf.is_64(),
+            meta.is_64bit,
+            "mismatch between ELF file format and CONFIG_64BIT"
+        );
 
         let (objs, counters) = find_kobjects(&elf, &meta, &struct_tags)?;
 
