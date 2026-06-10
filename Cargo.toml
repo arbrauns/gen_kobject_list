@@ -1,8 +1,9 @@
 [package]
 name = "gen_kobject_list"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
+rust-version = "1.85"
 
 [lints.rust]
 elided_lifetimes_in_paths = "warn"
