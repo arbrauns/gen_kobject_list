@@ -1,9 +1,13 @@
 [package]
 name = "gen_kobject_list"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.85"
+description = "A Rust rewrite of zephyr's gen_kobject_list.py"
+repository = "https://github.com/arbrauns/gen_kobject_list"
+keywords = ["elf", "dwarf", "gperf"]
+categories = ["command-line-utilities", "development-tools"]
 
 [lints.rust]
 elided_lifetimes_in_paths = "warn"
