@@ -1,0 +1,7 @@
+# Surgically oxidising the Zephyr build system for 100x performance improvements
+
+One of our larger Zephyr projects had always taken quite long to build, causing an uncomfortably slow debugging feedback loop. When incremental builds started taking an entire minute, I decided to investigate further.
+
+Contrary to our initial suspicion (the linker), what I found was that a single python script that extracts information from the zephyr ELF files takes up a majority of the build time. As an experiment, I rewrote this script in Rust and reduced its runtime by a factor of 100x, and total build time by a factor of 12x.
+
+Thanks to some upstream integration, it is now a drop-in replacement that can drastically improve build performance.
