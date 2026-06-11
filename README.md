@@ -8,7 +8,12 @@ In the author's benchmarks, this drop-in rewrite reduces the bare script runtime
 
 ## Using
 
-Build and install the tool by cloning the repository and running `cargo install --path . --locked`. Make sure the cargo bin directory is in your `$PATH`.
+Build and install the tool by either:
+- running `cargo install --locked gen_kobject_list` to install the latest released version,
+- running `cargo install --locked --git https://github.com/arbrauns/gen_kobject_list` to install the latest development version,
+- cloning the repository, inspecting the source code, and then running `cargo install --locked --path .`.
+
+Make sure the cargo bin directory is in your `$PATH` (`cargo install` will also nag you about it).
 
 The binary will be detected and used automatically by the Zephyr CMake build system, as indicated by output like the one below:
 
